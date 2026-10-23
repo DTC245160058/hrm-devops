@@ -160,3 +160,23 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro
     networks: [monitoring]
+
+  loki:
+    image: grafana/loki:3.3.2
+    <<: *hardening
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./logging/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
+    networks: [monitoring]
+
+  promtail:
+    image: grafana/promtail:3.3.2
+    <<: *hardening
+    command: -config.file=/etc/promtail/promtail-config.yml
+    volumes:
+      - ./logging/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail-positions:/positions
+    depends_on: [loki]
+    networks: [monitoring]
