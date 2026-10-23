@@ -1,0 +1,94 @@
+name: hrm
+
+x-hardening: &hardening
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+networks:
+  frontend:
+  backend:
+    internal: true      # khong ra Internet, khong publish duoc port
+  monitoring:
+    internal: true
+
+volumes:
+  db-data:
+  pgadmin-data:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+  promtail-positions:
+
+services:
+  db:
+    image: postgres:16-alpine
+    <<: *hardening
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      APP_DB_USER: ${APP_DB_USER}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      EXPORTER_DB_USER: ${EXPORTER_DB_USER}
+      EXPORTER_DB_PASSWORD: ${EXPORTER_DB_PASSWORD}
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: ./app
+    image: hrm-app:1.0
+    <<: *hardening
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${APP_DB_USER}
+      DB_PASSWORD: ${APP_DB_PASSWORD}
+    depends_on:
+      db: { condition: service_healthy }
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    networks: [frontend, backend]
+
+  pgadmin:
+    image: dpage/pgadmin4:8.14
+    <<: *hardening
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+      PGADMIN_LISTEN_PORT: 5050
+      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: "True"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    networks: [frontend, backend]
+
+  nginx:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    <<: *hardening
+    depends_on: [app, pgadmin]
+    ports:
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/snippets:/etc/nginx/snippets:ro
+      - ./nginx/locations:/etc/nginx/locations:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - ./nginx/htpasswd:/etc/nginx/htpasswd:ro
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    networks: [frontend]

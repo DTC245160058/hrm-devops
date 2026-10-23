@@ -1,0 +1,12 @@
+{
+  "name": "hrm-app",
+  "version": "1.0.0",
+  "description": "He thong quan ly nhan su (HRM) - De 10",
+  "main": "src/server.js",
+  "scripts": { "start": "node src/server.js" },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.13.1",
+    "prom-client": "^15.1.3"
+  }
+}
